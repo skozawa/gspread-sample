@@ -67,6 +67,38 @@ class Gspread(object):
         # https://github.com/burnash/gspread/issues/472#issuecomment-317631725
         self.client = gspread.Client(auth=credentials)
         self.client.session = AuthorizedSession(credentials)
+        self._current_sheet = None
+        self.name_prefix = 'sample-'
+
+    @property
+    def current_sheet(self):
+        if self._current_sheet is None:
+            name = '%s%s' % (self.name_prefix, datetime.datetime.now().strftime('%Y%m%d%H%M%S'))
+            self._current_sheet = self.client.create(name)
+        return self._current_sheet
+
+    @property
+    def sheet_url(self):
+        return 'https://docs.google.com/spreadsheets/d/%s/' % (self.current_sheet.id)
+
+    def get_or_create_worksheet(self, index, title=None, rows=5, cols=5):
+        ws = self.current_sheet.get_worksheet(index)
+        if not ws:
+            ws = self.current_sheet.add_worksheet(str(index), rows, cols)
+        if title:
+            ws.update_title(title)
+        return ws
+
+    def write_rows(self, index, rows, title=None):
+        ws = self.get_or_create_worksheet(index, title=title)
+        rows_len = len(rows)
+        cols_len = len(rows[0])
+        ws.resize(rows_len, cols_len)
+        cell_list = ws.range(1, 1, rows_len, cols_len)
+        for i in range(rows_len):
+            for j in range(cols_len):
+                cell_list[cols_len * i + j].value = rows[i][j]
+        ws.update_cells(cell_list)
 
 
 parser = argparse.ArgumentParser()
@@ -78,4 +110,19 @@ args = parser.parse_args()
 spread = Gspread(
     CredentialsWithMemcache(args.key_json, args.force_refresh).credentials
 )
-print(spread.client.openall())
+# print(spread.client.openall())
+
+for i in range(5):
+    spread.write_rows(i, [
+        ['a', 'b', 'c', 'd'],
+        [1, 2, 3, 4],
+        [5 ,6, 7, 8],
+        [1, 2, 3, 4],
+        [5 ,6, 7, 8],
+        [1, 2, 3, 4],
+        [5 ,6, 7, 8],
+        [1, 2, 3, 4],
+        [5 ,6, 7, 8],
+    ], title='sample%d' % (i))
+
+print(spread.sheet_url)
